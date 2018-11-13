@@ -99,6 +99,52 @@ public class WeatherService {
     }
 
     /**
+     * Receive the weather of the city
+     * @param city
+     * @return userHash to be send to use
+     */
+    public String receiveWeatherCurrent(String city){
+        String cityFound;
+        String responseToUser;
+        try {
+            String completeURL = BASEURL + CURRENTPATH + "?" + getCityQuery(city) + APIIDEND;
+            CloseableHttpClient client = HttpClientBuilder.create().setSSLHostnameVerifier(new NoopHostnameVerifier()).build();
+            HttpGet request = new HttpGet(completeURL);
+            CloseableHttpResponse response = client.execute(request);
+            HttpEntity ht = response.getEntity();
+
+            BufferedHttpEntity buf = new BufferedHttpEntity(ht);
+            String responseString = EntityUtils.toString(buf, "UTF-8");
+
+            JSONObject jsonObject = new JSONObject(responseString);
+            if (jsonObject.getInt("cod") == 200){
+                cityFound = jsonObject.getString("name") + " (" + jsonObject.getJSONObject("sys").getString("country") + ")";
+                responseToUser = String.format("In city: %s, weather: %s", cityFound, convertCurrentWeatherToString(jsonObject));
+            }
+            else {
+                BotLogger.warn(LOGTAG, jsonObject.toString());
+                responseToUser = "cityNotFound";
+            }
+        }
+        catch (Exception ex){
+            BotLogger.error(LOGTAG, ex);
+            responseToUser = "errorFetchingWeather";
+        }
+        return responseToUser;
+    }
+
+    private String convertCurrentWeatherToString(JSONObject jsonObject){
+        String temp = ((int)jsonObject.getJSONObject("main").getDouble("temp")) +"";
+        String cloudness = jsonObject.getJSONObject("clouds").getInt("all") + "%";
+        String weatherDesc = jsonObject.getJSONArray("weather").getJSONObject(0).getString("description");
+        String responseToUser;
+        responseToUser = "Weather: ";
+        //String responseToUser = weatherDesc + cloudness + temp;
+        responseToUser = String.format("%s, %s, %s", weatherDesc, cloudness, temp);
+        return responseToUser;
+    }
+
+    /**
      * Convert a list of weather forcast to a list of strings to be send
      * @param jsonObject JSONObject containing the list
      * @return String to be sent to the user

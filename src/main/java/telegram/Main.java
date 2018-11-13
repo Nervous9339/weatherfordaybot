@@ -35,7 +35,7 @@ public class Main {
             TelegramBotsApi telegramBotsApi = new TelegramBotsApi();
             try {
                 //register LongPolling bot.
-                telegramBotsApi.registerBot((LongPollingBot) new WeatherForDayBot());
+                telegramBotsApi.registerBot(new WeatherForDayBot());
             }
             catch (TelegramApiException ex){
                 BotLogger.error(LOGTAG, ex);
