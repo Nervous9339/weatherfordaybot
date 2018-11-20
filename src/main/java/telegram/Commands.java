@@ -6,11 +6,11 @@ package telegram;
  * @brief Command for the WeatherForDay_bot
  */
 public class Commands {
-    private static final String commandInitChar = "/";
+    public static final String commandInitChar = "/";
     //Help command
-    private static final String help = commandInitChar + "help";
+    public static final String help = commandInitChar + "help";
     //Start command
-    private static final String start = commandInitChar + "start";
+    public static final String start = commandInitChar + "start";
     //Stop command
-    private static final String STOPCOMMAND = commandInitChar + "stop";
+    public static final String STOPCOMMAND = commandInitChar + "stop";
 }

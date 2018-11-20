@@ -14,7 +14,7 @@ import org.telegram.telegrambots.meta.bots.AbsSender;
  */
 public class HelpCommand extends BotCommand {
 
-    private static final String LOGTAG = "HEKPCOMMAND";
+    private static final String LOGTAG = "HELPCOMMAND";
 
     private final ICommandRegistry commandRegistry;
 

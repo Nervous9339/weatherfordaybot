@@ -12,7 +12,6 @@ public class BuildVars {
 
     public static final String pathToLogs = "./";
 
-    //TODO fill fields about DataBaseg
-    //public static final String linkDB = "jdbc:sqlite:$PROJECT_DIR$/src/main/java/telegram/database\\userdatabase";
-    //public static final String controllerDB = "com.mysql.cj.jdbc.Driver";
+    public static final String linkDB = "jdbc:sqlite:C:/Users/nervous/IdeaProjects/telegrambot/WeatherForDayBot/src/main/java/telegram/database/botDB.s3db";
+    public static final String controllerDB = "org.sqlite.JDBC";
 }
