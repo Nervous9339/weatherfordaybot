@@ -9,9 +9,14 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 import org.telegram.telegrambots.meta.logging.BotLogger;
 import telegram.BotConfig;
+import telegram.Commands;
 import telegram.database.DatabaseManager;
+import telegram.services.CustomTimerTask;
+import telegram.services.TimerExecutor;
+import telegram.services.WeatherAlert;
 import telegram.services.WeatherService;
 
 import java.util.ArrayList;
@@ -25,7 +30,8 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
     private static final String NEW = "New";
     private static final String BACK = "Back";
     private static final String DELETE = "Delete";
-    private static final String SHOWSUBSCRIBES = "Subscribes";
+    private static final String SUBSCRIBES = "Subscribe";
+    private static final String LISTOFSUBSCRIBES = "List of your subscribes";
     private static final String LOCATION = "Location";
     // End Buttons
 
@@ -39,9 +45,11 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
     //End Help Message
 
     //Subscribe Menu
+    private static final String YOU_NEED_THIS_FIRST = "You don't have cities to get daily weather forecast. " +
+                                    "Please, go back and search for the _Current_ weather and then come back!";
     private static final String CHOOSE_NEW_SUBSCRIBE_CUTY = "For which city do you want to receive the weather?";
     private static final String CHOOSE_DELETE_SUBSCRIBE_CITY = "For which city do you want to delete subscribe?";
-    private static final String NO_SUBSCRIBE = "You have no subscriptions";
+    private static final String NO_SUBSCRIBE = "You don't have a subscription to receive a weather";
     private static final String SUBSCRIBE_DELETE = "The selected subscribe has been deleted";
     private static final String INITIAL_SUBSCRIBE_STRING = "You have _%d_ subscribes:\n\n%s";
     private static final String PARTIAL_SUBSCRIBE = "_%S_\n";
@@ -50,7 +58,6 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
     //End Subscribe Menu
 
     //The rest of the menu
-    private static final String HELP = "Help";
     private static final String ONCANCEL_COMMAND = "Back to main menu";
     private static final String ONWEATHER_NEW_COMMAND = "Please, send me the name of the city";
     private static final String ONWEATHER_LOCATION_COMMAND = "Please, send me a location";
@@ -79,6 +86,7 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
 
     public WeatherForDayBot() {
         super();
+        startAlertTimers();
     }
 
     @Override
@@ -103,6 +111,47 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
     @Override
     public String getBotUsername() {
         return BotConfig.WEATHERBOT_NAME;
+    }
+
+    private static SendMessage messageOnMainMenu(Message message){
+        SendMessage sendMessageRequest;
+        if (message.hasText()){
+            if (message.getText().equals(getCurrentCommand())){
+                sendMessageRequest = onCurrentChosen(message);
+            }
+            else if (message.getText().equals(getForecastCommand())){
+                sendMessageRequest = onForecastChosen(message);
+            }
+            else if (message.getText().equals(getSubscribesCommand())){
+                sendMessageRequest = onSubscribeChosen(message);
+            }
+            else if (message.getText().equals(Commands.help) || message.getText().equals(Commands.start)){
+                sendMessageRequest = sendHelpMessage(message.getChatId(), message.getMessageId(), getMainMenuKeyboard());
+            }
+            else {
+                sendMessageRequest = sendChooseOptionMessage(message.getChatId(), message.getMessageId(),
+                        getMainMenuKeyboard());
+            }
+        }
+        else {
+            sendMessageRequest = sendChooseOptionMessage(message.getChatId(), message.getMessageId(),
+                    getMainMenuKeyboard());
+        }
+        return sendMessageRequest;
+    }
+
+    private static SendMessage onSubscribeChosen(Message message){
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.enableMarkdown(true);
+
+        ReplyKeyboardMarkup replyKeyboardMarkup = getSubscribesKeyboard();
+        sendMessage.setReplyMarkup(replyKeyboardMarkup);
+        sendMessage.setReplyToMessageId(message.getMessageId());
+        sendMessage.setChatId(message.getChatId());
+        sendMessage.setText(CHOOSE_OPTION);
+
+        DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), SUBSCRIBE);
+        return sendMessage;
     }
 
     private static SendMessage onCancelCommand(Long chatID, Integer userID, Integer messageID, ReplyKeyboard replyKeyboard){
@@ -153,26 +202,25 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
 
     //Block for Main menu
 
-    private static SendMessage messageOnMainMenu(Message message){
-        SendMessage sendMessageRequest;
+    private static SendMessage onForecastWeather(Message message){
+        SendMessage sendMessageRequest = null;
         if (message.hasText()){
-            if (message.getText().equals(getCurrentCommand())){
-                sendMessageRequest = onCurrentChosen(message);
+            if (message.getText().startsWith(getNewCommand())){
+                sendMessageRequest = onNewForecastWeatherCommand(message.getChatId(), message.getFrom().getId(),
+                        message.getMessageId());
             }
-            else if (message.getText().equals(getForecastCommand())){
-                sendMessageRequest = onForecastChosen(message);
+            else if (message.getText().startsWith(getLocationCommand())){
+                sendMessageRequest = onLocationForecastWeatherCommand(message.getChatId(), message.getFrom().getId(),
+                        message.getMessageId());
             }
-            else if (message.getText().equals(getSubscribesCommand())){
-                sendMessageRequest = onSubscribeChosen(message);
+            else if (message.getText().startsWith(getCancelCommand())){
+                sendMessageRequest = onCancelCommand(message.getChatId(), message.getFrom().getId(),
+                        message.getMessageId(), getMainMenuKeyboard());
             }
             else {
-                sendMessageRequest = sendChooseOptionMessage(message.getChatId(), message.getMessageId(),
-                        getMainMenuKeyboard());
+                sendMessageRequest = onForecastWeatherCityReceived(message.getChatId(), message.getFrom().getId(),
+                        message.getMessageId(), message.getText());
             }
-        }
-        else {
-            sendMessageRequest = sendChooseOptionMessage(message.getChatId(), message.getMessageId(),
-                    getMainMenuKeyboard());
         }
         return sendMessageRequest;
     }
@@ -215,18 +263,23 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
         return sendMessage;
     }
 
-    private static SendMessage onSubscribeChosen(Message message){
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.enableMarkdown(true);
+    private static SendMessage onForecastWeatherCityReceived(Long chatID, Integer userID, Integer messageID, String cityName){
+        Integer cityID = DatabaseManager.getInstance().getRecentWeatherIdByCity(userID, cityName);
+        if (cityID != null){
+            String weather = WeatherService.getInstance().receiveWeatherForecast(cityID.toString(), userID);
+            SendMessage sendMessage = new SendMessage();
+            sendMessage.enableMarkdown(true);
+            sendMessage.setReplyToMessageId(messageID);
+            sendMessage.setReplyMarkup(getMainMenuKeyboard());
+            sendMessage.setChatId(chatID.toString());
+            sendMessage.setText(weather);
 
-        ReplyKeyboardMarkup replyKeyboardMarkup = getRecentsKeyboard(message.getFrom().getId());
-        sendMessage.setReplyMarkup(replyKeyboardMarkup);
-        sendMessage.setReplyToMessageId(message.getMessageId());
-        sendMessage.setChatId(message.getChatId());
-        sendMessage.setText(CHOOSE_OPTION);
-
-        DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), SUBSCRIBE);
-        return sendMessage;
+            DatabaseManager.getInstance().insertWeatherState(userID, chatID, MAINMENU);
+            return sendMessage;
+        }
+        else {
+            return sendChooseOptionMessage(chatID, messageID, getRecentsKeyboard(userID));
+        }
     }
 
     //EndBlock for Main menu
@@ -355,25 +408,25 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
         return sendMessageRequest;
     }
 
-    private static SendMessage onForecastWeather(Message message){
+    private static SendMessage onSubscribeOptionSelected(Message message){
         SendMessage sendMessageRequest = null;
         if (message.hasText()){
-            if (message.getText().startsWith(getNewCommand())){
-                sendMessageRequest = onNewForecastWeatherCommand(message.getChatId(), message.getFrom().getId(),
-                        message.getMessageId());
+            if (message.getText().equals(getNewCommand())){
+                sendMessageRequest = onNewSubscribeCommand(message);
             }
-            else if (message.getText().startsWith(getLocationCommand())){
-                sendMessageRequest = onLocationForecastWeatherCommand(message.getChatId(), message.getFrom().getId(),
-                        message.getMessageId());
+            else if (message.getText().equals(getDeleteCommand())){
+                sendMessageRequest = onDeleteSubscribeCommand(message);
             }
-            else if (message.getText().startsWith(getCancelCommand())){
-                sendMessageRequest = onCancelCommand(message.getChatId(), message.getFrom().getId(),
-                        message.getMessageId(), getMainMenuKeyboard());
+            else if (message.getText().contains(getListCommand())){
+                sendMessageRequest = onListSubscribeCommand(message);
             }
-        }
-        else {
-            sendMessageRequest = onForecastWeatherCityReceived(message.getChatId(), message.getFrom().getId(),
-                    message.getMessageId(), message.getText());
+            else if (message.getText().equals(getBackCommand())){
+                sendMessageRequest = onBackSubscribeCommand(message);
+            }
+            else {
+                sendMessageRequest = sendChooseOptionMessage(message.getChatId(), message.getMessageId(),
+                        getSubscribesKeyboard());
+            }
         }
         return sendMessageRequest;
     }
@@ -416,23 +469,22 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
         return sendMessage;
     }
 
-    private static SendMessage onForecastWeatherCityReceived(Long chatID, Integer userID, Integer messageID, String cityName){
-        Integer cityID = DatabaseManager.getInstance().getRecentWeatherIdByCity(userID, cityName);
-        if (chatID != null){
-            String weather = WeatherService.getInstance().receiveWeatherForecast(cityID.toString(), userID);
-            SendMessage sendMessage = new SendMessage();
-            sendMessage.enableMarkdown(true);
-            sendMessage.setReplyToMessageId(messageID);
-            sendMessage.setReplyMarkup(getMainMenuKeyboard());
-            sendMessage.setChatId(chatID.toString());
-            sendMessage.setText(weather);
+    private static SendMessage onNewSubscribeCommand(Message message){
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.enableMarkdown(true);
 
-            DatabaseManager.getInstance().insertWeatherState(userID, chatID, MAINMENU);
-            return sendMessage;
+        sendMessage.setChatId(message.getChatId());
+        sendMessage.setReplyMarkup(getRecentsKeyboard(message.getFrom().getId(), false));
+        if (getRecentsKeyboard(message.getFrom().getId(), false).getKeyboard().size() < 2){
+            sendMessage.setText(YOU_NEED_THIS_FIRST);
         }
         else {
-            return sendChooseOptionMessage(chatID, messageID, getRecentsKeyboard(userID));
+            sendMessage.setText(CHOOSE_NEW_SUBSCRIBE_CUTY);
         }
+        sendMessage.setReplyToMessageId(message.getMessageId());
+
+        DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), SUBSCRIBENEW);
+        return sendMessage;
     }
 
     private static SendMessage onForecastLocationWeather(Message message){
@@ -464,40 +516,38 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
         return sendMessageRequest;
     }
 
-    private static SendMessage onSubscribeOptionSelected(Message message){
-        SendMessage sendMessageRequest = null;
-        if (message.hasText()){
-            if (message.getText().equals(getNewCommand())){
-                sendMessageRequest = onNewSubscribeCommand(message);
-            }
-            else if (message.getText().equals(getDeleteCommand())){
-                sendMessageRequest = onDeleteSubscribeCommand(message);
-            }
-            else if (message.getText().equals(getListCommand())){
-                sendMessageRequest = onListSubscribeCommand(message);
-            }
-            else if (message.getText().equals(getBackCommand())){
-                sendMessageRequest = onBackSubscribeCommand(message);
-            }
-            else {
-                sendMessageRequest = sendChooseOptionMessage(message.getChatId(), message.getMessageId(),
-                        getSubscribesKeyboard());
-            }
-        }
-        return sendMessageRequest;
-    }
-
-    private static SendMessage onNewSubscribeCommand(Message message){
+    private static SendMessage onBackSubscribeCommand(Message message){
         SendMessage sendMessage = new SendMessage();
         sendMessage.enableMarkdown(true);
 
-        sendMessage.setChatId(message.getChatId());
-        sendMessage.setReplyMarkup(getRecentsKeyboard(message.getFrom().getId(), false));
-        sendMessage.setText(CHOOSE_NEW_SUBSCRIBE_CUTY);
+        ReplyKeyboardMarkup replyKeyboardMarkup = getMainMenuKeyboard();
+        sendMessage.setReplyMarkup(replyKeyboardMarkup);
         sendMessage.setReplyToMessageId(message.getMessageId());
+        sendMessage.setChatId(message.getChatId());
+        sendMessage.setText(getHelpMessage());
 
-        DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), SUBSCRIBENEW);
+        DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), MAINMENU);
         return sendMessage;
+    }
+
+    private static SendMessage onNewSubscribeOptionSelected(Message message){
+        SendMessage sendMessageRequest = null;
+        if (message.hasText()){
+            if (message.getText().equals(getCancelCommand())){
+                SendMessage sendMessage = new SendMessage();
+                sendMessage.enableMarkdown(true);
+                sendMessage.setChatId(message.getChatId());
+                sendMessage.setReplyToMessageId(message.getMessageId());
+                sendMessage.setReplyMarkup(getSubscribesKeyboard());
+                sendMessage.setText(CHOOSE_OPTION);
+                DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), SUBSCRIBE);
+                sendMessageRequest = sendMessage;
+            }
+            else {
+                sendMessageRequest = onNewSubscribeCityReceived(message);
+            }
+        }
+        return sendMessageRequest;
     }
 
     private static SendMessage onDeleteSubscribeCommand(Message message){
@@ -534,37 +584,34 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
         return sendMessage;
     }
 
-    private static SendMessage onBackSubscribeCommand(Message message){
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.enableMarkdown(true);
+    private static ReplyKeyboardMarkup getSubscribesKeyboard(){
+        ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
+        replyKeyboardMarkup.setSelective(true);
+        replyKeyboardMarkup.setResizeKeyboard(true);
+        replyKeyboardMarkup.setOneTimeKeyboard(true);
 
-        ReplyKeyboardMarkup replyKeyboardMarkup = getMainMenuKeyboard();
-        sendMessage.setReplyMarkup(replyKeyboardMarkup);
-        sendMessage.setReplyToMessageId(message.getMessageId());
-        sendMessage.setChatId(message.getChatId());
-        sendMessage.setChatId(getHelpMessage());
+        List<KeyboardRow> keyboard = new ArrayList<>();
+        KeyboardRow firstRow = new KeyboardRow();
+        firstRow.add(getNewCommand());
+        KeyboardRow secondRow = new KeyboardRow();
+        secondRow.add(getDeleteCommand());
+        KeyboardRow thirdRow = new KeyboardRow();
+        thirdRow.add(getListCommand());
+        KeyboardRow fourthRow = new KeyboardRow();
+        fourthRow.add(getBackCommand());
 
-        DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), MAINMENU);
-        return sendMessage;
+        keyboard.add(firstRow);
+        keyboard.add(secondRow);
+        keyboard.add(thirdRow);
+        keyboard.add(fourthRow);
+
+        replyKeyboardMarkup.setKeyboard(keyboard);
+
+        return replyKeyboardMarkup;
     }
 
-    private static SendMessage onNewSubscribeOptionSelected(Message message){
-        SendMessage sendMessageRequest = null;
-        if (message.hasText()){
-            if (message.getText().equals(getCancelCommand())){
-                SendMessage sendMessage = new SendMessage();
-                sendMessage.enableMarkdown(true);
-                sendMessage.setChatId(message.getChatId());
-                sendMessage.setReplyToMessageId(message.getMessageId());
-                sendMessage.setReplyMarkup(getSubscribesKeyboard());
-                DatabaseManager.getInstance().insertWeatherState(message.getFrom().getId(), message.getChatId(), SUBSCRIBE);
-                sendMessageRequest = sendMessage;
-            }
-            else {
-                sendMessageRequest = onNewSubscribeCityReceived(message);
-            }
-        }
-        return sendMessageRequest;
+    private static String getListCommand(){
+        return LISTOFSUBSCRIBES;
     }
 
     private static SendMessage onNewSubscribeCityReceived(Message message){
@@ -695,30 +742,8 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
         return replyKeyboardMarkup;
     }
 
-    private static ReplyKeyboardMarkup getSubscribesKeyboard(){
-        ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
-        replyKeyboardMarkup.setSelective(true);
-        replyKeyboardMarkup.setResizeKeyboard(true);
-        replyKeyboardMarkup.setOneTimeKeyboard(true);
-
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow firstRow = new KeyboardRow();
-        firstRow.add(getNewCommand());
-        KeyboardRow secondRow = new KeyboardRow();
-        secondRow.add(getDeleteCommand());
-        KeyboardRow thirdRow = new KeyboardRow();
-        thirdRow.add(getSubscribesCommand());
-        KeyboardRow fourthRow = new KeyboardRow();
-        fourthRow.add(getBackCommand());
-
-        keyboard.add(firstRow);
-        keyboard.add(secondRow);
-        keyboard.add(thirdRow);
-        keyboard.add(fourthRow);
-
-        replyKeyboardMarkup.setKeyboard(keyboard);
-
-        return replyKeyboardMarkup;
+    private static String getSubscribesCommand(){
+        return SUBSCRIBES;
     }
 
     private static ReplyKeyboardMarkup getSubscribesListKeyboad(Integer userID){
@@ -760,16 +785,36 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
 
     //Block of getCommands
 
-    private static String getListCommand(){
-        return SHOWSUBSCRIBES;
+    private static SendMessage sendHelpMessage(Long chatID, Integer messageID, ReplyKeyboardMarkup replyKeyboardMarkup){
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.enableMarkdown(true);
+        sendMessage.setChatId(chatID);
+        sendMessage.setReplyToMessageId(messageID);
+        if (replyKeyboardMarkup != null){
+            sendMessage.setReplyMarkup(replyKeyboardMarkup);
+        }
+        sendMessage.setText(HELP_WEATHER_MESSAGE);
+        return sendMessage;
     }
 
     private static String getDeleteCommand(){
         return DELETE;
     }
 
-    private static String getSubscribesCommand(){
-        return SHOWSUBSCRIBES;
+    private void startAlertTimers(){
+        TimerExecutor.getInstance().startExecutionEveryDayAt(new CustomTimerTask("First day alert", -1) {
+            @Override
+            public void execute(){
+                sendAlerts();
+            }
+        }, 0, 0, 0);
+
+        TimerExecutor.getInstance().startExecutionEveryDayAt(new CustomTimerTask("Second day alert", -1){
+            @Override
+            public void execute(){
+                sendAlerts();
+            }
+        }, 12, 0, 0);
     }
 
     private static String getBackCommand(){
@@ -831,16 +876,36 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
 
     //Block of Send common messages
 
-    private static SendMessage sendHelpMessage(Long chatID, Integer messageID, ReplyKeyboardMarkup replyKeyboardMarkup){
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.enableMarkdown(true);
-        sendMessage.setChatId(chatID);
-        sendMessage.setReplyToMessageId(messageID);
-        if (replyKeyboardMarkup != null){
-            sendMessage.setReplyMarkup(replyKeyboardMarkup);
+    private void sendAlerts(){
+        List<WeatherAlert> alertList = DatabaseManager.getInstance().getAllAlerts();
+        for (WeatherAlert weatherAlert : alertList){
+            synchronized (Thread.currentThread()){
+                try {
+                    Thread.currentThread().wait(35);
+                }
+                catch (InterruptedException ex){
+                    BotLogger.severe(LOGTAG, ex);
+                }
+            }
+            String weather = WeatherService.getInstance().receiveWeatherAlert(weatherAlert.getCityID(), weatherAlert.getUserID());
+            SendMessage sendMessage = new SendMessage();
+            sendMessage.enableMarkdown(true);
+            sendMessage.setChatId(String.valueOf(weatherAlert.getUserID()));
+            sendMessage.setText(weather);
+            try {
+                execute(sendMessage);
+            }
+            catch (TelegramApiRequestException ex){
+                BotLogger.warn(LOGTAG, ex);
+                if (ex.getApiResponse().contains("Can't access the chat") ||
+                        ex.getApiResponse().contains("Bot was blocked by the user")){
+                    DatabaseManager.getInstance().deleteAlertsForUser(weatherAlert.getUserID());
+                }
+            }
+            catch (Exception ex){
+                BotLogger.severe(LOGTAG, ex);
+            }
         }
-        sendMessage.setText(CHOOSE_OPTION);
-        return sendMessage;
     }
 
     private static SendMessage sendMessageDefault(Message message){

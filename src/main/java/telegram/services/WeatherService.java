@@ -26,23 +26,25 @@ import java.time.format.DateTimeFormatter;
  * @brief Weather service
  */
 public class WeatherService {
-    private static final String weatherCurrent = "The weather for: %s is:\n\n%s";
-    private static final String cityNotFound = "City not found, sorry";
-    private static final String errorReceivingWeather = "Something went wrong, I couldn't get the weather for a given request";
-    private static final String weatherForecast = "In the next three days in _%s_ will be:\n\n%s";
-    private static final String forecastWeather = "\t- On *%s* \n\t- _Forecast:_ %s\n\t- _Max temperature:_ %s C\n\t- _Min temperature:_ %s C\n\n";
-    private static final String subscribeWeather = "\t _Forecast:_ %s\n\t- _Max temperature:_ %s C\n\t- _Min temperature:_ %s C\n\n";
+    private static final String WEATHER_CURRENT = "The weather for: %s is:\n\n%s";
+    private static final String CITY_NOT_FOUND = "City not found, sorry";
+    private static final String ERROR_RECEIVING_WEATHER = "Something went wrong, I couldn't get the weather for a given request";
+    private static final String WEATHER_FORECAST = "In the next three days in _%s_ will be:\n\n%s";
+    private static final String FORECAST_WEATHER = "\t- On *%s* \n\t- _Forecast:_ %s\n\t- _Max temperature:_ %s C\n\t- _Min temperature:_ %s C\n\n";
+    private static final String SUBSCRIBE_WEATHER = "\t _Forecast:_ %s\n\t- _Max temperature:_ %s C\n\t- _Min temperature:_ %s C\n\n";
 
     private static final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy"); // <-- Date to text
 
     private static final String LOGTAG = "WEATHERSERVICE";
 
-    public static final String METRICSYSTEM = "metric";
-
+    //Params for creating URL request
     private static final String BASEURL = "http://api.openweathermap.org/data/2.5/"; //<-- This is BASE url
-    private static final String FORECASTPATH = "forecast/daily";
+    private static final String FORECASTPATH = "forecast";
+    private static final String FORECASTDAILY = "forecas/daily";
+    private static final String FORECASTDAILYPARAMS = "&cnt=1&units=metric";
     private static final String CURRENTPATH = "weather";
-    private static final String UNITSMETRIC = "&units=metric";
+    private static final String CURRENTPARAMS = "&units=metric";
+    private static final String FORECASTPARAMS = "&cnt=3&units=metric";
     private static final String APIIDEND = "&APPID=" + BuildVars.OPENWEATHERAPIKEY;
     private static volatile WeatherService instance; // <-- instance of this class
 
@@ -77,11 +79,11 @@ public class WeatherService {
      * @return userHash to be send to use
      *
      */
- /*   public String receiveWeatherAlert(int cityId, int userId){
+    public String receiveWeatherAlert(int cityId, int userId){
         String cityFound;
         String responseToUser;
         try {
-            String completeURL = BASEURL + FORECASTPATH + "?" + getCityQuery(cityId +"") + FORECASTPARAMS + APIIDEND;
+            String completeURL = BASEURL + FORECASTDAILY + "?" + getCityQuery(cityId +"") + FORECASTDAILYPARAMS + APIIDEND;
             CloseableHttpClient client = HttpClientBuilder.create().setSSLHostnameVerifier(new NoopHostnameVerifier()).build();
             HttpGet request = new HttpGet(completeURL);
 
@@ -97,20 +99,20 @@ public class WeatherService {
                 cityFound = jsonObject.getJSONObject("city").getString("name") + " (" +
                         jsonObject.getJSONObject("city").getString("country") + ")";
                 saveRecentWeather(userId, cityFound, jsonObject.getJSONObject("city").getInt("id"));
-                responseToUser = String.format(cityFound, convertListOfForecastToString(jsonObject, false));
+                responseToUser = String.format(WEATHER_CURRENT, cityFound, convertListOfForecastToString(jsonObject, false));
             }
             else {
                 BotLogger.warn(LOGTAG, jsonObject.toString());
-                responseToUser = "CityNotFound";
+                responseToUser = CITY_NOT_FOUND;
             }
         }
         catch (Exception ex){
             BotLogger.error(LOGTAG, ex);
-            responseToUser = "errorReceivingWeather";
+            responseToUser = ERROR_RECEIVING_WEATHER;
         }
         return responseToUser;
     }
-    */
+
 
     /**
      * Receive the current weather by the city name
@@ -121,7 +123,7 @@ public class WeatherService {
         String cityFound;
         String responseToUser;
         try {
-            String completeURL = BASEURL + CURRENTPATH + "?" + getCityQuery(city) + UNITSMETRIC + APIIDEND;
+            String completeURL = BASEURL + CURRENTPATH + "?" + getCityQuery(city) + CURRENTPARAMS + APIIDEND;
             CloseableHttpClient client = HttpClientBuilder.create().setSSLHostnameVerifier(new NoopHostnameVerifier()).build();
             HttpGet request = new HttpGet(completeURL);
             CloseableHttpResponse response = client.execute(request);
@@ -134,16 +136,16 @@ public class WeatherService {
             if (jsonObject.getInt("cod") == 200){
                 cityFound = jsonObject.getString("name") + " (" + jsonObject.getJSONObject("sys").getString("country") + ")";
                 saveRecentWeather(userID, cityFound, jsonObject.getInt("id"));
-                responseToUser = String.format(weatherCurrent, cityFound, convertCurrentWeatherToString(jsonObject));
+                responseToUser = String.format(WEATHER_CURRENT, cityFound, convertCurrentWeatherToString(jsonObject));
             }
             else {
                 BotLogger.warn(LOGTAG, jsonObject.toString());
-                responseToUser = cityNotFound;
+                responseToUser = CITY_NOT_FOUND;
             }
         }
         catch (Exception ex){
             BotLogger.error(LOGTAG, ex);
-            responseToUser = errorReceivingWeather;
+            responseToUser = ERROR_RECEIVING_WEATHER;
         }
         return responseToUser;
     }
@@ -159,7 +161,7 @@ public class WeatherService {
         String responseToUser;
         try {
             String completeURL = BASEURL + CURRENTPATH + "?lat=" + URLEncoder.encode(latitude + "", "UTF-8") +
-                    "&lon=" + URLEncoder.encode(longitude + "", "UTF-8") + UNITSMETRIC + APIIDEND;
+                    "&lon=" + URLEncoder.encode(longitude + "", "UTF-8") + CURRENTPARAMS + APIIDEND;
             CloseableHttpClient client = HttpClientBuilder.create().setSSLHostnameVerifier(new NoopHostnameVerifier()).build();
             HttpGet request = new HttpGet(completeURL);
             CloseableHttpResponse response = client.execute(request);
@@ -173,16 +175,16 @@ public class WeatherService {
                 cityFound = jsonObject.getString("name") + " (" +
                         jsonObject.getJSONObject("sys").getString("country") + ")";
                 saveRecentWeather(userID, cityFound, jsonObject.getInt("id"));
-                responseToUser = String.format(weatherCurrent, cityFound, convertCurrentWeatherToString(jsonObject));
+                responseToUser = String.format(WEATHER_CURRENT, cityFound, convertCurrentWeatherToString(jsonObject));
             }
             else {
                 BotLogger.warn(LOGTAG, jsonObject.toString());
-                responseToUser = cityNotFound;
+                responseToUser = CITY_NOT_FOUND;
             }
         }
         catch (Exception ex){
             BotLogger.error(LOGTAG, ex);
-            responseToUser = errorReceivingWeather;
+            responseToUser = ERROR_RECEIVING_WEATHER;
         }
         return responseToUser;
     }
@@ -198,7 +200,7 @@ public class WeatherService {
         String cityFound;
         String responseToUser;
         try {
-            String completeURL = BASEURL + FORECASTPATH + "?" + getCityQuery(city) + UNITSMETRIC + APIIDEND;
+            String completeURL = BASEURL + FORECASTPATH + "?" + getCityQuery(city) + FORECASTPARAMS + APIIDEND;
             CloseableHttpClient client = HttpClientBuilder.create().setSSLHostnameVerifier(new NoopHostnameVerifier()).build();
             HttpGet request = new HttpGet(completeURL);
 
@@ -213,16 +215,16 @@ public class WeatherService {
                 cityFound = jsonObject.getJSONObject("city").getString("name") + " (" +
                         jsonObject.getJSONObject("city").getString("country") + ")";
                 saveRecentWeather(userID, cityFound, jsonObject.getJSONObject("city").getInt("id"));
-                responseToUser = String.format(weatherForecast, cityFound, convertListOfForecastToString(jsonObject, true));
+                responseToUser = String.format(WEATHER_FORECAST, cityFound, convertListOfForecastToString(jsonObject, true));
             }
             else {
                 BotLogger.warn(LOGTAG, jsonObject.toString());
-                responseToUser = cityNotFound;
+                responseToUser = CITY_NOT_FOUND;
             }
         }
         catch (Exception ex){
             BotLogger.error(LOGTAG, ex);
-            responseToUser = errorReceivingWeather;
+            responseToUser = ERROR_RECEIVING_WEATHER;
         }
         return responseToUser;
     }
@@ -239,7 +241,7 @@ public class WeatherService {
         String responseToUser;
         try {
             String completeURL = BASEURL + FORECASTPATH + "?lat=" + URLEncoder.encode(latitude + "", "UTF-8") +
-                    "&lon=" + URLEncoder.encode(longitude + "", "UTF-8") + METRICSYSTEM + APIIDEND;
+                    "&lon=" + URLEncoder.encode(longitude + "", "UTF-8") + FORECASTPARAMS + APIIDEND;
 
             CloseableHttpClient client = HttpClientBuilder.create().setSSLHostnameVerifier(new NoopHostnameVerifier()).build();
             HttpGet request = new HttpGet(completeURL);
@@ -255,16 +257,16 @@ public class WeatherService {
                 cityFound = jsonObject.getJSONObject("city").getString("name") +" (" +
                         jsonObject.getJSONObject("city").getString("country") + ")";
                 saveRecentWeather(userID, cityFound, jsonObject.getJSONObject("city").getInt("id"));
-                responseToUser = String.format(weatherForecast, cityFound, convertListOfForecastToString(jsonObject, true));
+                responseToUser = String.format(WEATHER_FORECAST, cityFound, convertListOfForecastToString(jsonObject, true));
             }
             else {
                 BotLogger.warn(LOGTAG, jsonObject.toString());
-                responseToUser = cityNotFound;
+                responseToUser = CITY_NOT_FOUND;
             }
         }
         catch (Exception ex){
             BotLogger.error(LOGTAG, ex);
-            responseToUser = errorReceivingWeather;
+            responseToUser = ERROR_RECEIVING_WEATHER;
         }
         return responseToUser;
     }
@@ -278,7 +280,7 @@ public class WeatherService {
         String temp = ((int)jsonObject.getJSONObject("main").getDouble("temp")) +"";
         String cloudness = jsonObject.getJSONObject("clouds").getInt("all") + "%";
         String weatherDesc = jsonObject.getJSONArray("weather").getJSONObject(0).getString("description");
-        return String.format("humidity: %s \n %s \n temperature: %s C", cloudness, weatherDesc, temp);
+        return String.format("Humidity: %s \n Cloudiness: %s \n Temperature: %s C", cloudness, weatherDesc, temp);
     }
 
 
@@ -308,16 +310,16 @@ public class WeatherService {
         String tempMin;
         String weather;
         date = Instant.ofEpochSecond(internalJSON.getLong("dt")).atZone(ZoneId.systemDefault()).toLocalDate();
-        tempMax = String.valueOf(internalJSON.getJSONObject("temp").getDouble("max"));
-        tempMin = String.valueOf(internalJSON.getJSONObject("temp").getDouble("min"));
+        tempMax = String.valueOf(internalJSON.getJSONObject("main").getDouble("temp_max"));
+        tempMin = String.valueOf(internalJSON.getJSONObject("main").getDouble("temp_min"));
         JSONObject weatherObject = internalJSON.getJSONArray("weather").getJSONObject(0);
         weather = weatherObject.getString("description");
 
         if (addDate){
-            return String.format(forecastWeather, dateFormatter.format(date), weather, tempMax, tempMin);
+            return String.format(FORECAST_WEATHER, dateFormatter.format(date), weather, tempMax, tempMin);
         }
         else {
-            return String.format(subscribeWeather, weather, tempMax, tempMin);
+            return String.format(SUBSCRIBE_WEATHER, weather, tempMax, tempMin);
         }
     }
 

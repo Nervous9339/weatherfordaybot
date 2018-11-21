@@ -3,6 +3,7 @@ package telegram.database;
 
 
 import org.telegram.telegrambots.meta.logging.BotLogger;
+import telegram.services.WeatherAlert;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -64,7 +65,6 @@ public class DatabaseManager {
     private void createNewTables() throws SQLException{
         conection.executeQuery(CreationStrings.createRecentWeatherTable);
         conection.executeQuery(CreationStrings.createWeatherStateTable);
-        conection.executeQuery(CreationStrings.createUserWeatherOptionDatabase);
         conection.executeQuery(CreationStrings.createWeatherAlertTable);
     }
 
@@ -213,5 +213,25 @@ public class DatabaseManager {
             ex.printStackTrace();
         }
         return updatedRows > 0;
+    }
+
+    public List<WeatherAlert> getAllAlerts(){
+        List<WeatherAlert> alertList = new ArrayList<>();
+
+        try {
+            final PreparedStatement preparedStatement = conection.getPreparedStatement("SELECT * FROM WeatherAlert");
+            final ResultSet resultSet = preparedStatement.executeQuery();
+            while (resultSet.next()){
+                WeatherAlert weatherAlert = new WeatherAlert();
+                weatherAlert.setId(resultSet.getInt("id"));
+                weatherAlert.setUserID(resultSet.getInt("userID"));
+                weatherAlert.setCityID(resultSet.getInt("cityID"));
+                alertList.add(weatherAlert);
+            }
+        }
+        catch (SQLException ex){
+            ex.printStackTrace();
+        }
+        return alertList;
     }
 }
