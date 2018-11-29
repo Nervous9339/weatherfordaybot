@@ -40,7 +40,7 @@ public class WeatherForDayBot extends TelegramLongPollingBot {
             "Hey, want some weather?\n" +
                     "Just send me one of this commands:\n" +
                     "Click on _Current_ and get current weather\n" +
-                    "Click on _Forecast_ and get 3-day forecast\n" +
+                    "Click on _Forecast_ and get 9-hours forecast\n" +
                     "_Subscribe_ to receive weather every day";
     //End Help Message
 

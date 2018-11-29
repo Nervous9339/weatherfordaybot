@@ -29,22 +29,22 @@ public class WeatherService {
     private static final String WEATHER_CURRENT = "The weather for: %s is:\n\n%s";
     private static final String CITY_NOT_FOUND = "City not found, sorry";
     private static final String ERROR_RECEIVING_WEATHER = "Something went wrong, I couldn't get the weather for a given request";
-    private static final String WEATHER_FORECAST = "In the next three days in _%s_ will be:\n\n%s";
+    private static final String WEATHER_FORECAST = "Over the next few hours in _%s_ the weather will be like this:\n\n%s";
     private static final String FORECAST_WEATHER = "\t- On *%s* \n\t- _Forecast:_ %s\n\t- _Max temperature:_ %s C\n\t- _Min temperature:_ %s C\n\n";
     private static final String SUBSCRIBE_WEATHER = "\t _Forecast:_ %s\n\t- _Max temperature:_ %s C\n\t- _Min temperature:_ %s C\n\n";
 
-    private static final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy"); // <-- Date to text
+    //private static final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy"); // <-- Date to text
 
     private static final String LOGTAG = "WEATHERSERVICE";
 
     //Params for creating URL request
     private static final String BASEURL = "http://api.openweathermap.org/data/2.5/"; //<-- This is BASE url
     private static final String FORECASTPATH = "forecast";
-    private static final String FORECASTDAILY = "forecas/daily";
-    private static final String FORECASTDAILYPARAMS = "&cnt=1&units=metric";
+    private static final String FORECASTDAILY = "forecast/daily";
+    private static final String FORECASTDAILYPARAMS = "&units=metric&cnt=1";
     private static final String CURRENTPATH = "weather";
     private static final String CURRENTPARAMS = "&units=metric";
-    private static final String FORECASTPARAMS = "&cnt=3&units=metric";
+    private static final String FORECASTPARAMS = "&units=metric&cnt=3";
     private static final String APIIDEND = "&APPID=" + BuildVars.OPENWEATHERAPIKEY;
     private static volatile WeatherService instance; // <-- instance of this class
 
@@ -305,18 +305,18 @@ public class WeatherService {
      * @return String to the user
      */
     private String convertInternalInformationToString(JSONObject internalJSON, boolean addDate){
-        LocalDate date;
         String tempMax;
         String tempMin;
         String weather;
-        date = Instant.ofEpochSecond(internalJSON.getLong("dt")).atZone(ZoneId.systemDefault()).toLocalDate();
+        String currentDate;
+        currentDate = internalJSON.getString("dt_txt");
         tempMax = String.valueOf(internalJSON.getJSONObject("main").getDouble("temp_max"));
         tempMin = String.valueOf(internalJSON.getJSONObject("main").getDouble("temp_min"));
         JSONObject weatherObject = internalJSON.getJSONArray("weather").getJSONObject(0);
         weather = weatherObject.getString("description");
 
         if (addDate){
-            return String.format(FORECAST_WEATHER, dateFormatter.format(date), weather, tempMax, tempMin);
+            return String.format(FORECAST_WEATHER, currentDate, weather, tempMax, tempMin);
         }
         else {
             return String.format(SUBSCRIBE_WEATHER, weather, tempMax, tempMin);
